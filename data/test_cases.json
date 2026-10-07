@@ -1,0 +1,276 @@
+[
+  {
+    "id": "py-01",
+    "language": "python",
+    "code": "def average(values):\n    return sum(values) / len(values)\n\nscores = [4, 5, 3]\nprint(average(scores))",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "py-02",
+    "language": "python",
+    "code": "def find_item(items, target):\n    for i in range(len(items)):\n        if items[i] == target:\n            return i\n    return -1\n\nprint(find_item([\"a\", \"b\"], \"b\"))",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "py-03",
+    "language": "python",
+    "code": "def first_name(user):\n    return user[\"profile\"][\"name\"].split()[0]\n\nuser = {\"profile\": {\"name\": \"Ada Lovelace\"}}\nprint(first_name(user))",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "py-04",
+    "language": "python",
+    "code": "def has_duplicates(items):\n    seen = set()\n    for item in items:\n        if item in seen:\n            return True\n        seen.add(item)\n    return False\n\nprint(has_duplicates([1, 2, 1]))",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "py-05",
+    "language": "python",
+    "code": "def clamp(value, low, high):\n    if value < low:\n        return low\n    if value > high:\n        return high\n    return value\n\nprint(clamp(12, 0, 10))",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "py-06",
+    "language": "python",
+    "code": "def format_user(user):\n    if user is None:\n        return \"Guest\"\n    return f\"{user['first']} {user['last']}\"\n\nprint(format_user({\"first\": \"Grace\", \"last\": \"Hopper\"}))",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "py-07",
+    "language": "python",
+    "code": "def count_words(text):\n    words = text.split()\n    counts = {}\n    for word in words:\n        counts[word] = counts.get(word, 0) + 1\n    return counts\n\nprint(count_words(\"red blue red\"))",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "py-15",
+    "language": "python",
+    "code": "def find_last(items, target):\n    for index in range(len(items) - 1):\n        if items[index] == target:\n            return index\n    return -1\n\nprint(find_last([\"a\", \"b\"], \"b\"))",
+    "has_bug": true,
+    "bug_description": "The range stops before the final list element, so a matching last item is never found.",
+    "category": "off_by_one"
+  },
+  {
+    "id": "py-16",
+    "language": "python",
+    "code": "def get_city(user):\n    return user[\"address\"][\"city\"]\n\nuser = {\"name\": \"Sam\"}\nprint(get_city(user))",
+    "has_bug": true,
+    "bug_description": "The function indexes missing address and city keys, raising KeyError for the provided user.",
+    "category": "null_reference"
+  },
+  {
+    "id": "py-17",
+    "language": "python",
+    "code": "def total_price(prices):\n    total = 0\n    for price in prices:\n        total += price\n    return total\n\nprint(total_price([10, \"5\", 7]))",
+    "has_bug": true,
+    "bug_description": "Adding the string \"5\" to the numeric total raises TypeError.",
+    "category": "type_error"
+  },
+  {
+    "id": "py-18",
+    "language": "python",
+    "code": "def is_adult(age):\n    return age > 18\n\nprint(is_adult(18))\nprint(is_adult(21))",
+    "has_bug": true,
+    "bug_description": "The strict comparison classifies someone exactly 18 as not an adult; the boundary should be inclusive.",
+    "category": "logic_error"
+  },
+  {
+    "id": "py-19",
+    "language": "python",
+    "code": "def get_first(items):\n    return items[0]\n\nprint(get_first([1]))\nprint(get_first([]))",
+    "has_bug": true,
+    "bug_description": "Indexing the first element of an empty list raises IndexError.",
+    "category": "null_reference"
+  },
+  {
+    "id": "py-20",
+    "language": "python",
+    "code": "def average(values):\n    return sum(values) / len(values)\n\nprint(average([2, 4]))\nprint(average([]))",
+    "has_bug": true,
+    "bug_description": "An empty list makes the function divide by zero.",
+    "category": "logic_error"
+  },
+  {
+    "id": "py-21",
+    "language": "python",
+    "code": "def has_permission(role):\n    return role == \"admin\" or \"editor\"\n\nprint(has_permission(\"admin\"))\nprint(has_permission(\"guest\"))",
+    "has_bug": true,
+    "bug_description": "The non-empty string \"editor\" is always truthy, so the function returns true for every role.",
+    "category": "logic_error"
+  },
+  {
+    "id": "py-22",
+    "language": "python",
+    "code": "def append_event(event, events=[]):\n    events.append(event)\n    return events\n\nprint(append_event(\"start\"))\nprint(append_event(\"stop\"))",
+    "has_bug": true,
+    "bug_description": "The mutable default list is shared across calls, so events leak between invocations.",
+    "category": "logic_error"
+  },
+  {
+    "id": "py-23",
+    "language": "python",
+    "code": "def is_positive(value):\n    if value = 0:\n        return False\n    return value > 0\n\nprint(is_positive(2))",
+    "has_bug": true,
+    "bug_description": "The condition uses assignment instead of comparison, which is invalid syntax in a Python if expression.",
+    "category": "syntax_error"
+  },
+  {
+    "id": "py-24",
+    "language": "python",
+    "code": "def remove_negatives(values):\n    for value in values:\n        if value < 0:\n            values.remove(value)\n    return values\n\nprint(remove_negatives([-1, -2, 3]))",
+    "has_bug": true,
+    "bug_description": "Removing elements while iterating skips adjacent negative values.",
+    "category": "logic_error"
+  },
+  {
+    "id": "py-25",
+    "language": "python",
+    "code": "def percentage(part, whole):\n    return part / whole * 100\n\nprint(percentage(5, 10))\nprint(percentage(5, 0))",
+    "has_bug": true,
+    "bug_description": "A zero whole value causes division by zero.",
+    "category": "logic_error"
+  },
+  {
+    "id": "js-01",
+    "language": "javascript",
+    "code": "function sum(values) {\n  return values.reduce((total, value) => total + value, 0);\n}\n\nconsole.log(sum([2, 3, 4]));",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "js-02",
+    "language": "javascript",
+    "code": "function findUser(users, id) {\n  return users.find((user) => user.id === id) ?? null;\n}\n\nconsole.log(findUser([{ id: 1 }], 1));",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "js-03",
+    "language": "javascript",
+    "code": "function capitalize(text) {\n  if (text.length === 0) return text;\n  return text[0].toUpperCase() + text.slice(1);\n}\n\nconsole.log(capitalize(\"hello\"));",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "js-04",
+    "language": "javascript",
+    "code": "function isInRange(value, min, max) {\n  return value >= min && value <= max;\n}\n\nconsole.log(isInRange(5, 1, 10));",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "js-05",
+    "language": "javascript",
+    "code": "function removeById(items, id) {\n  return items.filter((item) => item.id !== id);\n}\n\nconsole.log(removeById([{ id: 1 }, { id: 2 }], 1));",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "js-06",
+    "language": "javascript",
+    "code": "function fullName(user) {\n  if (!user) return \"Guest\";\n  return `${user.first} ${user.last}`;\n}\n\nconsole.log(fullName({ first: \"Lin\", last: \"Park\" }));",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "js-07",
+    "language": "javascript",
+    "code": "function countBy(items, key) {\n  return items.reduce((counts, item) => {\n    counts[item[key]] = (counts[item[key]] || 0) + 1;\n    return counts;\n  }, {});\n}\n\nconsole.log(countBy([\"a\", \"b\", \"a\"], \"length\"));",
+    "has_bug": false,
+    "category": "clean"
+  },
+  {
+    "id": "js-15",
+    "language": "javascript",
+    "code": "function isEligible(age) {\n  return age > 21;\n}\n\nconsole.log(isEligible(21));",
+    "has_bug": true,
+    "bug_description": "The strict comparison excludes someone exactly 21 even though the eligibility boundary is intended to be inclusive.",
+    "category": "logic_error"
+  },
+  {
+    "id": "js-16",
+    "language": "javascript",
+    "code": "function getEmail(user) {\n  return user.profile.email;\n}\n\nconsole.log(getEmail(null));",
+    "has_bug": true,
+    "bug_description": "Accessing profile on null throws a TypeError.",
+    "category": "null_reference"
+  },
+  {
+    "id": "js-17",
+    "language": "javascript",
+    "code": "function total(items) {\n  return items.reduce((sum, item) => sum + item.price, 0);\n}\n\nconsole.log(total([{ price: 5 }, {}]));",
+    "has_bug": true,
+    "bug_description": "An item without a price adds undefined and turns the total into NaN.",
+    "category": "type_error"
+  },
+  {
+    "id": "js-18",
+    "language": "javascript",
+    "code": "function hasRole(role) {\n  return role === \"admin\" || \"editor\";\n}\n\nconsole.log(hasRole(\"guest\"));",
+    "has_bug": true,
+    "bug_description": "The non-empty string \"editor\" is always truthy, so every role passes the check.",
+    "category": "logic_error"
+  },
+  {
+    "id": "js-19",
+    "language": "javascript",
+    "code": "function getLast(items) {\n  return items[items.length - 1];\n}\n\nconsole.log(getLast([]).toUpperCase());",
+    "has_bug": true,
+    "bug_description": "An empty array produces undefined, and calling toUpperCase on it throws a TypeError.",
+    "category": "null_reference"
+  },
+  {
+    "id": "js-20",
+    "language": "javascript",
+    "code": "function incrementCount(count) {\n  count = count || 1;\n  return count + 1;\n}\n\nconsole.log(incrementCount(0));",
+    "has_bug": true,
+    "bug_description": "The truthy fallback replaces a valid zero count with one, returning 2 instead of 1.",
+    "category": "logic_error"
+  },
+  {
+    "id": "js-21",
+    "language": "javascript",
+    "code": "function updateName(user, name) {\n  user.name = name;\n  return user;\n}\n\nconsole.log(updateName(undefined, \"Kai\"));",
+    "has_bug": true,
+    "bug_description": "The function dereferences undefined when assigning user.name.",
+    "category": "null_reference"
+  },
+  {
+    "id": "js-22",
+    "language": "javascript",
+    "code": "function isAdult(age) {\n  return age >= \"18\";\n}\n\nconsole.log(isAdult(\"9\"));",
+    "has_bug": true,
+    "bug_description": "When both operands are strings, the comparison is lexicographic, so \"9\" is incorrectly considered greater than or equal to \"18\".",
+    "category": "type_error"
+  },
+  {
+    "id": "js-23",
+    "language": "javascript",
+    "code": "function isPositive(value) {\n  if (value > 0 {\n    return true;\n  }\n  return false;\n}\n\nconsole.log(isPositive(2));",
+    "has_bug": true,
+    "bug_description": "The if condition is missing a closing parenthesis, causing a syntax error.",
+    "category": "syntax_error"
+  },
+  {
+    "id": "js-24",
+    "language": "javascript",
+    "code": "function findLast(items, target) {\n  for (let i = 0; i < items.length - 1; i++) {\n    if (items[i] === target) return i;\n  }\n  return -1;\n}\n\nconsole.log(findLast([\"a\", \"b\"], \"b\"));",
+    "has_bug": true,
+    "bug_description": "The loop condition skips the final array element.",
+    "category": "off_by_one"
+  },
+  {
+    "id": "js-25",
+    "language": "javascript",
+    "code": "function formatPrice(price) {\n  return \"$\" + price.toFixed(2);\n}\n\nconsole.log(formatPrice(\"12.50\"));",
+    "has_bug": true,
+    "bug_description": "The input is a string, which does not have the numeric toFixed method.",
+    "category": "type_error"
+  }
+]
