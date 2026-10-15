@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from statistics import fmean
 from typing import Any
+import uuid
 
 import requests
 from sqlalchemy import (
@@ -25,6 +26,7 @@ from sqlalchemy import (
     inspect,
     text,
 )
+from prompts import PROMPT_VARIANTS, build_prompt
 
 
 ROOT = Path(__file__).resolve().parent
@@ -32,10 +34,22 @@ DEFAULT_DATASET = ROOT / "data" / "test_cases.json"
 DEFAULT_DATABASE = ROOT / "rubric.db"
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
+DEFAULT_JUDGE_MODEL = "qwen2.5:3b"
+DEFAULT_ALL_MODELS = ("llama3", "qwen2.5-coder:7b", "mistral")
 DISAGREEMENT_JUDGE_MAX = 2
 DISAGREEMENT_SIMILARITY_MIN = 0.7
 
 metadata = MetaData()
+runs = Table(
+    "runs",
+    metadata,
+    Column("run_id", String, primary_key=True),
+    Column("model_name", String, nullable=False),
+    Column("prompt_variant", String, nullable=False),
+    Column("judge_model", String, nullable=False),
+    Column("started_at", DateTime(timezone=True), nullable=False),
+    Column("finished_at", DateTime(timezone=True)),
+)
 eval_results = Table(
     "eval_results",
     metadata,
@@ -48,6 +62,7 @@ eval_results = Table(
     Column("judge_score", Integer),
     Column("judge_reasoning", Text),
     Column("similarity_score", Float),
+    Column("run_id", String, nullable=True),
     Column("run_timestamp", DateTime(timezone=True), primary_key=True),
 )
 
@@ -152,15 +167,13 @@ def post_generate(
 
 
 def evaluate_case(
-    case: dict[str, Any], model_name: str, ollama_url: str, timeout: float
+    case: dict[str, Any],
+    model_name: str,
+    prompt_variant: str,
+    ollama_url: str,
+    timeout: float,
 ) -> tuple[bool, str]:
-    prompt = (
-        "Review the following code for an actual bug. Decide based only on the code; "
-        "do not invent missing requirements. Respond as a JSON object with exactly "
-        'these fields: {"has_bug": true or false, "explanation": "brief explanation"}. '
-        "If there is no clear bug, set has_bug to false.\n\n"
-        f"Language: {case['language']}\nCode:\n```{case['language']}\n{case['code']}\n```"
-    )
+    prompt = build_prompt(prompt_variant, case)
     for attempt in range(3):
         try:
             return parse_response(
@@ -281,6 +294,7 @@ def migrate_schema(engine: Any) -> None:
         "judge_score": "INTEGER",
         "judge_reasoning": "TEXT",
         "similarity_score": "FLOAT",
+        "run_id": "VARCHAR",
     }
     with engine.begin() as connection:
         for name, sql_type in additions.items():
@@ -288,6 +302,45 @@ def migrate_schema(engine: Any) -> None:
                 connection.execute(
                     text(f"ALTER TABLE eval_results ADD COLUMN {name} {sql_type}")
                 )
+        legacy_rows = connection.execute(
+            text(
+                "SELECT run_timestamp, model_name, MAX(judge_score IS NOT NULL) "
+                "FROM eval_results WHERE run_id IS NULL "
+                "GROUP BY run_timestamp, model_name"
+            )
+        ).all()
+        for run_timestamp, model_name, has_judge_scores in legacy_rows:
+            run_id = str(uuid.uuid4())
+            started_at = (
+                datetime.fromisoformat(run_timestamp)
+                if isinstance(run_timestamp, str)
+                else run_timestamp
+            )
+            legacy_judge = (
+                "llama3" if has_judge_scores else "not_recorded"
+            )
+            connection.execute(
+                runs.insert().values(
+                    run_id=run_id,
+                    model_name=model_name,
+                    prompt_variant="basic",
+                    judge_model=legacy_judge,
+                    started_at=started_at,
+                    finished_at=started_at,
+                )
+            )
+            connection.execute(
+                text(
+                    "UPDATE eval_results SET run_id = :run_id "
+                    "WHERE run_timestamp = :run_timestamp AND model_name = :model_name "
+                    "AND run_id IS NULL"
+                ),
+                {
+                    "run_id": run_id,
+                    "run_timestamp": run_timestamp,
+                    "model_name": model_name,
+                },
+            )
 
 
 def average(values: list[float | int | None]) -> float | None:
@@ -366,13 +419,111 @@ def print_summary(
         )
 
 
+def run_evaluation(
+    cases: list[dict[str, Any]],
+    engine: Any,
+    model_name: str,
+    prompt_variant: str,
+    judge_model: str,
+    embedding_model: str,
+    ollama_url: str,
+    timeout: float,
+) -> str:
+    run_id = str(uuid.uuid4())
+    started_at = datetime.now(timezone.utc)
+    with engine.begin() as connection:
+        connection.execute(
+            runs.insert().values(
+                run_id=run_id,
+                model_name=model_name,
+                prompt_variant=prompt_variant,
+                judge_model=judge_model,
+                started_at=started_at,
+            )
+        )
+
+    results: list[dict[str, Any]] = []
+    for case in cases:
+        predicted, explanation = evaluate_case(
+            case, model_name, prompt_variant, ollama_url, timeout
+        )
+        actual = case["has_bug"]
+        result: dict[str, Any] = {
+            "test_case_id": case["id"],
+            "model_name": model_name,
+            "predicted_has_bug": predicted,
+            "actual_has_bug": actual,
+            "model_explanation": explanation,
+            "correct": predicted == actual,
+            "judge_score": None,
+            "judge_reasoning": None,
+            "similarity_score": None,
+            "run_id": run_id,
+            "run_timestamp": started_at,
+        }
+        if actual:
+            result["judge_score"], result["judge_reasoning"] = score_with_judge(
+                explanation,
+                case["bug_description"],
+                judge_model,
+                ollama_url,
+                timeout,
+            )
+            vectors = get_embeddings(
+                [explanation, case["bug_description"]],
+                embedding_model,
+                ollama_url,
+                timeout,
+            )
+            result["similarity_score"] = cosine_similarity(vectors[0], vectors[1])
+        results.append(result)
+        print(
+            f"{case['id']}: predicted={predicted}, actual={actual}, "
+            f"correct={result['correct']}, judge={result['judge_score']}, "
+            f"similarity={format_average(result['similarity_score'])}"
+        )
+
+    finished_at = datetime.now(timezone.utc)
+    with engine.begin() as connection:
+        connection.execute(eval_results.insert(), results)
+        connection.execute(
+            runs.update()
+            .where(runs.c.run_id == run_id)
+            .values(finished_at=finished_at)
+        )
+    print(
+        f"\nCompleted run {run_id}: {model_name} / {prompt_variant} "
+        f"(judge: {judge_model})"
+    )
+    print_summary(cases, results, model_name, judge_model)
+    return run_id
+
+
+def canonical_model_name(model_name: str) -> str:
+    normalized = model_name.strip().lower()
+    return normalized[:-7] if normalized.endswith(":latest") else normalized
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluate an Ollama model on the bug dataset.")
-    parser.add_argument("--model", default="llama3", help="Ollama model name (default: llama3)")
+    parser.add_argument(
+        "--model",
+        help="Ollama model name (default: llama3; ignored with --all)",
+    )
+    parser.add_argument(
+        "--prompt-variant",
+        choices=PROMPT_VARIANTS,
+        help="Prompt variant (default: basic; ignored with --all)",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Run every configured model and prompt-variant combination",
+    )
     parser.add_argument(
         "--judge-model",
-        default=os.environ.get("JUDGE_MODEL", "llama3"),
-        help="Ollama judge model (default: JUDGE_MODEL env var or llama3)",
+        default=os.environ.get("JUDGE_MODEL", DEFAULT_JUDGE_MODEL),
+        help=f"Fixed judge model (default: JUDGE_MODEL env var or {DEFAULT_JUDGE_MODEL})",
     )
     parser.add_argument(
         "--embedding-model",
@@ -386,55 +537,41 @@ def main() -> int:
     args = parser.parse_args()
 
     cases = load_cases(args.dataset)
+    judge_model = args.judge_model.strip()
+    model_names = (
+        DEFAULT_ALL_MODELS if args.all else (args.model or "llama3",)
+    )
+    prompt_variants = (
+        PROMPT_VARIANTS if args.all else (args.prompt_variant or "basic",)
+    )
+    if not judge_model:
+        raise ValueError("Judge model cannot be empty")
+    if args.all and canonical_model_name(judge_model) in {
+        canonical_model_name(model_name) for model_name in model_names
+    }:
+        raise ValueError(
+            f"--all requires an independent judge model; {judge_model!r} is one "
+            "of the models being evaluated. Set JUDGE_MODEL to a different model."
+        )
+
     engine = create_engine(f"sqlite:///{args.database}", future=True)
     migrate_schema(engine)
-    timestamp = datetime.now(timezone.utc)
-    results: list[dict[str, Any]] = []
-
-    for case in cases:
-        predicted, explanation = evaluate_case(
-            case, args.model, args.ollama_url, args.timeout
-        )
-        actual = case["has_bug"]
-        result: dict[str, Any] = {
-            "test_case_id": case["id"],
-            "model_name": args.model,
-            "predicted_has_bug": predicted,
-            "actual_has_bug": actual,
-            "model_explanation": explanation,
-            "correct": predicted == actual,
-            "judge_score": None,
-            "judge_reasoning": None,
-            "similarity_score": None,
-            "run_timestamp": timestamp,
-        }
-        if actual:
-            result["judge_score"], result["judge_reasoning"] = score_with_judge(
-                explanation,
-                case["bug_description"],
-                args.judge_model,
-                args.ollama_url,
-                args.timeout,
-            )
-            vectors = get_embeddings(
-                [explanation, case["bug_description"]],
-                args.embedding_model,
-                args.ollama_url,
-                args.timeout,
-            )
-            result["similarity_score"] = cosine_similarity(vectors[0], vectors[1])
-        results.append(result)
-        print(
-            f"{case['id']}: predicted={predicted}, actual={actual}, "
-            f"correct={result['correct']}, judge={result['judge_score']}, "
-            f"similarity={format_average(result['similarity_score'])}"
-        )
-
-    with engine.begin() as connection:
-        connection.execute(eval_results.insert(), results)
-    print(f"\nResults saved to: {args.database}")
-    print_summary(cases, results, args.model, args.judge_model)
-    engine.dispose()
+    try:
+        for model_name in model_names:
+            for prompt_variant in prompt_variants:
+                run_evaluation(
+                    cases,
+                    engine,
+                    model_name,
+                    prompt_variant,
+                    judge_model,
+                    args.embedding_model,
+                    args.ollama_url,
+                    args.timeout,
+                )
+        print(f"\nResults saved to: {args.database}")
+    finally:
+        engine.dispose()
     return 0
 
 
