@@ -50,3 +50,24 @@ rows had no recorded judge score, their run's judge is labeled
 `not_recorded`. The historical scored run retains its original `llama3` judge;
 new `--all` runs use the same independent judge. The comparison table displays
 the judge model so historical scores from a different judge are identifiable.
+
+## Dashboard
+
+Install the API requirements with `pip install -r requirements.txt`. In one
+PowerShell window, start the read-only API:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn api:app --reload --port 8000
+```
+
+In a second window, start the dashboard:
+
+```powershell
+cd frontend
+npm.cmd install
+npm.cmd run dev
+```
+
+Open `http://localhost:3000`. The frontend's `NEXT_PUBLIC_API_BASE` is set in
+`frontend/.env.local` to `http://localhost:8000`. The API reads test metadata
+from `data/test_cases.json` and opens `rubric.db` in SQLite read-only mode.
